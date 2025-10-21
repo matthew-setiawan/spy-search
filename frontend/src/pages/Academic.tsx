@@ -27,7 +27,7 @@ const Academic = () => {
       const formData = new FormData();
       formData.append('messages', JSON.stringify([{ role: 'user', content: searchQuery }]));
       
-      const res = await fetch(`http://localhost:8000/stream_completion_academic/${encodeURIComponent(searchQuery)}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/stream_completion_academic/${encodeURIComponent(searchQuery)}`, {
         method: 'POST',
         body: formData,
       });

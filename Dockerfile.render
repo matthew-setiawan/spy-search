@@ -1,0 +1,59 @@
+# Optimized Dockerfile for Render deployment
+FROM python:3.13-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    ca-certificates \
+    build-essential \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm-dev \
+    libasound2 \
+    libpangocairo-1.0-0 \
+    libgtk-3-0 \
+    libxshmfence1 \
+    libglib2.0-0 \
+    npm \
+    dos2unix \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv globally
+RUN pip install uv
+
+# Copy requirements first for better caching
+COPY requirements.txt ./
+COPY frontend/package*.json ./frontend/
+
+# Copy scripts
+COPY installation.sh run.sh ./
+
+# Convert line endings and make scripts executable
+RUN dos2unix installation.sh run.sh && \
+    sed -i 's/\r$//' installation.sh && \
+    sed -i 's/\r$//' run.sh && \
+    chmod +x installation.sh run.sh
+
+# Copy the rest of the application
+COPY . .
+
+# Run installation script
+RUN /bin/sh installation.sh
+
+# Build frontend for production
+RUN cd frontend && npm run build
+
+# Expose port (Render will use PORT environment variable)
+EXPOSE $PORT
+
+# Use run.render.sh as the container entrypoint for production
+ENTRYPOINT ["/bin/sh", "run.render.sh"]

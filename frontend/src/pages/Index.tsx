@@ -34,7 +34,7 @@ const Index = () => {
     const agentsToSend = config.agents.filter(agent => agent !== "planner");
     
     try {
-      const response = await fetch('http://localhost:8000/agents_selection', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/agents_selection`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ const Index = () => {
 
   const handleConversationSelect = async (title: string) => {
     try {
-      const response = await fetch('http://localhost:8000/load_message', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/load_message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),

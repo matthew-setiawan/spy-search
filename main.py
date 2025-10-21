@@ -62,6 +62,8 @@ app.include_router(router)
 
 origins = [
     "http://localhost:8080",
+    "https://spy-search.onrender.com",
+    "https://*.onrender.com",
 ]
 
 app.add_middleware(
