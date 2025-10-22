@@ -11,6 +11,7 @@ from urllib.parse import urlparse, quote_plus
 import os
 import requests
 from bs4 import BeautifulSoup
+from selectolax.parser import HTMLParser
 import json
 
 logger = logging.getLogger(__name__)
@@ -50,34 +51,49 @@ class GoogleSearch:
         self._text_cleanup = re.compile(r'\s+')
         self._html_tags = re.compile(r'<[^>]+>')
         
-    def _search_google_cse(self, query: str, max_results: int = 6) -> List[Dict]:
+    def _search_google_cse(self, query: str, max_results: int = 20) -> List[Dict]:
         """
         Search using Google Custom Search Engine
         """
         try:
-            # Construct Google CSE API URL
-            params = {
-                'key': self.api_key,
-                'cx': self.cse_id,
-                'q': query,
-                'num': min(max_results, 10),  # Google CSE max is 10 per request
-                'safe': 'off'
-            }
+            # Google CSE max is 10 per request, so we need multiple requests for more results
+            all_results = []
+            start_index = 1
             
-            logger.info(f"Searching Google CSE for: {query}")
-            
-            response = requests.get(self.base_url, params=params, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                results = self._parse_google_results(data, max_results)
+            while len(all_results) < max_results and start_index <= 91:  # Google CSE max is 100 results total
+                # Calculate how many results to request in this batch
+                batch_size = min(10, max_results - len(all_results))
                 
-                logger.info(f"Found {len(results)} results from Google CSE")
-                return results
-            else:
-                logger.error(f"Google CSE search failed with status code: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                return []
+                params = {
+                    'key': self.api_key,
+                    'cx': self.cse_id,
+                    'q': query,
+                    'num': batch_size,
+                    'start': start_index,
+                    'safe': 'off'
+                }
+                
+                logger.info(f"Searching Google CSE for: {query} (batch starting at {start_index})")
+                
+                response = requests.get(self.base_url, params=params, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    batch_results = self._parse_google_results(data, batch_size)
+                    all_results.extend(batch_results)
+                    
+                    # If we got fewer results than requested, we've reached the end
+                    if len(batch_results) < batch_size:
+                        break
+                        
+                    start_index += 10
+                else:
+                    logger.error(f"Google CSE search failed with status code: {response.status_code}")
+                    logger.error(f"Response: {response.text}")
+                    break
+            
+            logger.info(f"Found {len(all_results)} results from Google CSE")
+            return all_results[:max_results]
                 
         except Exception as e:
             logger.error(f"Google CSE search error: {e}")
@@ -133,7 +149,9 @@ class GoogleSearch:
             return self._content_cache[url]
         
         try:
-            async with session.get(url, allow_redirects=True, max_redirects=2) as response:
+            # Add more generous request timeout for content extraction
+            timeout = aiohttp.ClientTimeout(total=30, connect=10, sock_read=20)
+            async with session.get(url, allow_redirects=True, max_redirects=2, timeout=timeout) as response:
                 if response.status != 200:
                     self._failed_urls.add(url)
                     return ""
@@ -142,35 +160,61 @@ class GoogleSearch:
                 content_bytes = await response.content.read(20480)
                 content_str = content_bytes.decode('utf-8', errors='ignore')
                 
-                # Fast text extraction using BeautifulSoup
+                # Fast text extraction using BeautifulSoup, with simple fallbacks
                 try:
                     soup = BeautifulSoup(content_str, 'html.parser')
-                    paragraphs = soup.find_all('p')[:15]  # Only first 15 paragraphs
-                    
                     texts = []
-                    for p in paragraphs:
-                        text = p.get_text(strip=True)
-                        if text and len(text) > 20:
-                            texts.append(text)
-                            # Stop early if we have enough content
-                            if len(' '.join(texts)) > 200:
-                                break
-                except:
-                    # Fallback: simple regex
-                    matches = re.findall(r'<p[^>]*>(.*?)</p>', content_str, re.IGNORECASE | re.DOTALL)[:10]
+
+                    # 1) Meta description first if present
+                    meta_desc = soup.find('meta', attrs={'name': 'description'})
+                    if meta_desc and meta_desc.get('content'):
+                        md = meta_desc.get('content', '').strip()
+                        if md and len(md) > 40:
+                            texts.append(md)
+
+                    # 2) Article container common patterns
+                    article = soup.find('article')
+                    if article:
+                        for p in article.find_all('p')[:15]:
+                            t = p.get_text(strip=True)
+                            if t and len(t) > 20:
+                                texts.append(t)
+                                if len(' '.join(texts)) > 600:
+                                    break
+
+                    # 3) Headings as context
+                    if len(' '.join(texts)) < 200:
+                        for h in soup.find_all(['h1','h2','h3'])[:5]:
+                            t = h.get_text(strip=True)
+                            if t and 10 < len(t) < 140:
+                                texts.append(t)
+                                if len(' '.join(texts)) > 300:
+                                    break
+
+                    # 4) General paragraphs fallback
+                    if len(' '.join(texts)) < 200:
+                        for p in soup.find_all('p')[:15]:
+                            t = p.get_text(strip=True)
+                            if t and len(t) > 20:
+                                texts.append(t)
+                                if len(' '.join(texts)) > 600:
+                                    break
+                except Exception:
+                    # Fallback: simple regex when parser fails
+                    matches = re.findall(r'<p[^>]*>(.*?)</p>', content_str, re.IGNORECASE | re.DOTALL)[:12]
                     texts = []
                     for match in matches:
                         text = self._html_tags.sub('', match).strip()
                         if text and len(text) > 20:
                             texts.append(text)
-                            if len(' '.join(texts)) > 200:
+                            if len(' '.join(texts)) > 600:
                                 break
                 
                 if not texts:
                     self._failed_urls.add(url)
                     return ""
                 
-                final_text = self._text_cleanup.sub(' ', unescape(' '.join(texts))).strip()[:300]
+                final_text = self._text_cleanup.sub(' ', unescape(' '.join(texts))).strip()[:10000]
                 
                 # Simple cache management
                 if len(self._content_cache) > 100:
@@ -182,6 +226,10 @@ class GoogleSearch:
                 self._content_cache[url] = final_text
                 return final_text
                 
+        except asyncio.TimeoutError:
+            self._failed_urls.add(url)
+            logger.debug(f"Content extraction timed out for {url}")
+            return ""
         except Exception as e:
             self._failed_urls.add(url)
             logger.debug(f"Content extraction failed for {url}: {e}")
@@ -204,8 +252,8 @@ class GoogleSearch:
                 },
             ) as session:
                 
-                # Limit concurrent requests for speed
-                semaphore = asyncio.Semaphore(min(k * 2, 20))
+                # Limit concurrent requests to avoid overwhelming sites
+                semaphore = asyncio.Semaphore(min(k, 5))
                 
                 async def process_single(result):
                     async with semaphore:
@@ -217,11 +265,11 @@ class GoogleSearch:
                 # Process only the URLs we need
                 tasks = [process_single(result) for result in results[:k]]
                 
-                # Race against time - 1.2s max for content extraction
+                # Race against time - 45s max for content extraction
                 try:
                     completed_results = await asyncio.wait_for(
                         asyncio.gather(*tasks, return_exceptions=True),
-                        timeout=1.2
+                        timeout=45.0
                     )
                     
                     final_results = []
@@ -249,7 +297,7 @@ class GoogleSearch:
         finally:
             await connector.close()
 
-    def search_result(self, query: str, k: int = 6, backend: str = "text", deep_search: bool = True) -> List[Dict]:
+    def search_result(self, query: str, k: int = 20, backend: str = "text", deep_search: bool = True) -> List[Dict]:
         """Super efficient search using Google CSE."""
         start_time = time.time()
         logger.info(f"Starting efficient search for: '{query}'")
@@ -287,7 +335,7 @@ class GoogleSearch:
                         logger.info("Already in async context - offloading deep search to worker thread")
                         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                             future = pool.submit(lambda: asyncio.run(self._process_results_fast(results, k)))
-                            final_results = future.result(timeout=1.3)
+                            final_results = future.result(timeout=60.0)
                     except RuntimeError:
                         # No event loop running, safe to create one
                         final_results = asyncio.run(self._process_results_fast(results, k))
@@ -296,8 +344,8 @@ class GoogleSearch:
                     logger.info(f"Search completed in {total_time:.3f}s")
                     
                     # Final time check - if we exceeded 1.5s, we failed
-                    if total_time > 1.5:
-                        logger.warning(f"Search exceeded 1.5s limit ({total_time:.3f}s) - returning empty")
+                    if total_time > 60.0:
+                        logger.warning(f"Search exceeded 60s limit ({total_time:.3f}s) - returning empty")
                         return []
                     
                     return final_results if final_results else []
