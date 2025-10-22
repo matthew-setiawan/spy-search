@@ -101,7 +101,7 @@ async def quick_response_logic(
     from ...browser.duckduckgo import DuckSearch
     from ...prompt.quick_search import quick_search_prompt
     
-    search_result = await DuckSearch().search_result(query)
+    search_result = DuckSearch().search_result(query)
     prompt = quick_search_prompt(query, search_result)
     res = quick_model.completion(prompt)
     return res
