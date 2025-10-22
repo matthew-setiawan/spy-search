@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import aiohttp
 from html import unescape
 import logging
@@ -281,13 +282,12 @@ class GoogleSearch:
                     # Check if there's already an event loop running
                     try:
                         loop = asyncio.get_running_loop()
-                        # If we're already in an async context, use run_coroutine_threadsafe
-                        logger.info("Already in async context - using run_coroutine_threadsafe for deep search")
-                        future = asyncio.run_coroutine_threadsafe(
-                            self._process_results_fast(results, k), loop
-                        )
-                        # Wait for the future to complete with timeout
-                        final_results = future.result(timeout=1.2)
+                        # If we're in an async context (and likely on the event-loop thread),
+                        # offload deep search to a worker thread with its own event loop to avoid deadlocks.
+                        logger.info("Already in async context - offloading deep search to worker thread")
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                            future = pool.submit(lambda: asyncio.run(self._process_results_fast(results, k)))
+                            final_results = future.result(timeout=1.3)
                     except RuntimeError:
                         # No event loop running, safe to create one
                         final_results = asyncio.run(self._process_results_fast(results, k))
@@ -302,6 +302,11 @@ class GoogleSearch:
                     
                     return final_results if final_results else []
                     
+                except concurrent.futures.TimeoutError:
+                    logger.warning("Deep search worker timed out - returning results without content")
+                    for result in results:
+                        result["full_content"] = ""
+                    return results[:k]
                 except Exception as e:
                     logger.error(f"Async processing failed: {e}")
                     # Return results without content on async failure

@@ -189,7 +189,7 @@ func googleCSESearch(query string, n int) ([]string, error) {
 		} `json:"items"`
 	}
 
-	err = json.Unmarshal(body, &googleResponse)g
+    err = json.Unmarshal(body, &googleResponse)
 	if err != nil {
 		return nil, err
 	}
