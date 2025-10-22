@@ -27,7 +27,28 @@ To set up just run
 python setup.py
 ```
 
-Add your API key in the .env file if you want to use API. Currently we support openAI, Claude, Gork & DeepSeek.
+## Environment Variables
+
+The application uses environment variables for API keys and configuration. After running `python setup.py`, you'll have a `.env` file with the following variables:
+
+### Required API Keys
+- `GOOGLE_CSE_API_KEY`: Your Google Custom Search Engine API key
+- `GOOGLE_CSE_ID`: Your Google Custom Search Engine ID
+- `OPENAI_API_KEY`: Your OpenAI API key (if using OpenAI models)
+- `ANTHROPIC_API_KEY`: Your Anthropic API key (if using Claude models)
+- `DEEPSEEK_API`: Your DeepSeek API key (if using DeepSeek models)
+- `GEMINI_API`: Your Google Gemini API key (if using Gemini models)
+- `XAI_API_KEY`: Your xAI API key (if using Grok models)
+
+### Setting Up Google Custom Search Engine
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable the Custom Search API
+3. Create credentials (API key)
+4. Go to [Google Custom Search Engine](https://cse.google.com/)
+5. Create a new search engine
+6. Copy your API key and Search Engine ID to the `.env` file
+
+**Important**: Never commit your `.env` file to version control. It's already included in `.gitignore`.
 
 Configure the `config.json` file for your local setup. You can copy the example configuration:
 

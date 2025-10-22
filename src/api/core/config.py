@@ -1,6 +1,10 @@
 import json
 import os
 from typing import Dict, Any
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def read_config() -> Dict[str, Any]:
     """Read configuration from file - keeps original function name"""

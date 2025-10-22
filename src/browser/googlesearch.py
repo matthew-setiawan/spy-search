@@ -277,12 +277,18 @@ class GoogleSearch:
             # Deep search with remaining time budget
             try:
                 # Run async content extraction
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
                 try:
-                    final_results = loop.run_until_complete(
-                        self._process_results_fast(results, k)
-                    )
+                    # Check if there's already an event loop running
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # If we're already in an async context, we need to handle this differently
+                        logger.warning("Already in async context - skipping deep search to avoid event loop conflict")
+                        for result in results:
+                            result["full_content"] = ""
+                        return results[:k]
+                    except RuntimeError:
+                        # No event loop running, safe to create one
+                        final_results = asyncio.run(self._process_results_fast(results, k))
                     
                     total_time = time.time() - start_time
                     logger.info(f"Search completed in {total_time:.3f}s")
@@ -294,8 +300,12 @@ class GoogleSearch:
                     
                     return final_results if final_results else []
                     
-                finally:
-                    loop.close()
+                except Exception as e:
+                    logger.error(f"Async processing failed: {e}")
+                    # Return results without content on async failure
+                    for result in results:
+                        result["full_content"] = ""
+                    return results[:k]
                     
             except Exception as e:
                 logger.error(f"Deep search failed: {e}")

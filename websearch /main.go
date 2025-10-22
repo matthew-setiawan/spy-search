@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -144,9 +145,14 @@ func createHTTPClient() *http.Client {
 func googleCSESearch(query string, n int) ([]string, error) {
 	client := createHTTPClient()
 	
-	// Google CSE API configuration
-	apiKey := "AIzaSyBugSgb1UvZUnEVyBWp7y3MoRpjZznauOI"
-	cseID := "430f8120b2aae4709"
+	// Google CSE API configuration - use environment variables
+	apiKey := os.Getenv("GOOGLE_CSE_API_KEY")
+	cseID := os.Getenv("GOOGLE_CSE_ID")
+	
+	if apiKey == "" || cseID == "" {
+		return nil, fmt.Errorf("GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID environment variables must be set")
+	}
+	
 	searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&num=%d", 
 		apiKey, cseID, url.QueryEscape(query), n)
 
@@ -183,7 +189,7 @@ func googleCSESearch(query string, n int) ([]string, error) {
 		} `json:"items"`
 	}
 
-	err = json.Unmarshal(body, &googleResponse)
+	err = json.Unmarshal(body, &googleResponse)g
 	if err != nil {
 		return nil, err
 	}
