@@ -281,11 +281,13 @@ class GoogleSearch:
                     # Check if there's already an event loop running
                     try:
                         loop = asyncio.get_running_loop()
-                        # If we're already in an async context, we need to handle this differently
-                        logger.warning("Already in async context - skipping deep search to avoid event loop conflict")
-                        for result in results:
-                            result["full_content"] = ""
-                        return results[:k]
+                        # If we're already in an async context, use run_coroutine_threadsafe
+                        logger.info("Already in async context - using run_coroutine_threadsafe for deep search")
+                        future = asyncio.run_coroutine_threadsafe(
+                            self._process_results_fast(results, k), loop
+                        )
+                        # Wait for the future to complete with timeout
+                        final_results = future.result(timeout=1.2)
                     except RuntimeError:
                         # No event loop running, safe to create one
                         final_results = asyncio.run(self._process_results_fast(results, k))
