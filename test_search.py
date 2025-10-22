@@ -40,7 +40,7 @@ def test_quick_search():
     """Test the quick search endpoint"""
     print("\n🚀 Testing Quick Search...")
     
-    query = "artificial intelligence trends 2024"
+    query = "Please find latest news on Neo Bank Commerce"
     url = f"{API_BASE}/quick/{query}"
     
     # Sample messages for testing
@@ -68,7 +68,7 @@ def test_quick_search():
             if "report" in result:
                 report = result["report"]
                 print(f"📊 Report length: {len(str(report))} characters")
-                print(f"📄 Report preview: {str(report)[:300]}...")
+                print(f"📄 Report preview: {str(report)}...")
             else:
                 print("⚠️  No report in response")
                 
@@ -110,7 +110,7 @@ def test_report_generation():
             if "report" in result:
                 report = result["report"]
                 print(f"📊 Report length: {len(str(report))} characters")
-                print(f"📄 Report preview: {str(report)[:500]}...")
+                print(f"📄 Report preview: {str(report)}...")
             else:
                 print("⚠️  No report in response")
                 

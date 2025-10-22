@@ -73,7 +73,7 @@ async def report(
 @router.get("/news/{category}")
 def get_news(category: str):
     """Get news - SAME ENDPOINT"""
-    from ...browser.duckduckgo import DuckSearch
+    from ...browser.googlesearch import GoogleSearch as DuckSearch
     res = DuckSearch().today_new(category)
     return {"news": res}
 
@@ -98,7 +98,7 @@ async def quick_response_logic(
     if files != None:
         pass  # TODO use mark it down to convert to text and append into the data arr
     
-    from ...browser.duckduckgo import DuckSearch
+    from ...browser.googlesearch import GoogleSearch as DuckSearch
     from ...prompt.quick_search import quick_search_prompt
     
     search_result = DuckSearch().search_result(query)

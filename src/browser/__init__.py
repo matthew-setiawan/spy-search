@@ -1,1 +1,1 @@
-from .duckduckgo import DuckSearch
+from .googlesearch import GoogleSearch as DuckSearch

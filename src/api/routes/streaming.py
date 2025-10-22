@@ -34,7 +34,7 @@ async def stream_data(
         # Handle search if needed
         if needs_search:
             async def search_pipeline():
-                from ...browser.duckduckgo import DuckSearch
+                from ...browser.googlesearch import GoogleSearch as DuckSearch
                 search_instance = DuckSearch()
                 return await asyncio.to_thread(search_instance.search_result, query)
 
@@ -106,7 +106,7 @@ async def stream_academic_data(
         model.messages = validated_messages[:-1] if len(validated_messages) != 1 else []
 
         # Search arXiv
-        from ...browser.duckduckgo import DuckSearch
+        from ...browser.googlesearch import GoogleSearch as DuckSearch
         from ...prompt.quick_search import quick_search_prompt
 
         search_result = DuckSearch().search_result("site:arxiv.org " + query)

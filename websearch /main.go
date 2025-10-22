@@ -50,10 +50,10 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 
-	urls, err := duckDuckGoSearch(query, 5)
+	urls, err := googleCSESearch(query, 5)
 	if err != nil {
 		http.Error(w, "search error: "+err.Error(), http.StatusInternalServerError)
-		log.Printf("[ERROR] DuckDuckGo search failed: %v", err)
+		log.Printf("[ERROR] Google CSE search failed: %v", err)
 		return
 	}
 
@@ -141,22 +141,22 @@ func createHTTPClient() *http.Client {
 	}
 }
 
-func duckDuckGoSearch(query string, n int) ([]string, error) {
+func googleCSESearch(query string, n int) ([]string, error) {
 	client := createHTTPClient()
-	searchURL := "https://html.duckduckgo.com/html/"
+	
+	// Google CSE API configuration
+	apiKey := "AIzaSyBugSgb1UvZUnEVyBWp7y3MoRpjZznauOI"
+	cseID := "430f8120b2aae4709"
+	searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&num=%d", 
+		apiKey, cseID, url.QueryEscape(query), n)
 
-	formData := url.Values{}
-	formData.Set("q", query)
-
-	req, err := http.NewRequest("POST", searchURL, strings.NewReader(formData.Encode()))
+	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", getRandomUserAgent())
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip, deflate")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Upgrade-Insecure-Requests", "1")
@@ -171,22 +171,30 @@ func duckDuckGoSearch(query string, n int) ([]string, error) {
 		return nil, fmt.Errorf("status code %d", resp.StatusCode)
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	// Parse Google CSE JSON response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var googleResponse struct {
+		Items []struct {
+			Link string `json:"link"`
+		} `json:"items"`
+	}
+
+	err = json.Unmarshal(body, &googleResponse)
 	if err != nil {
 		return nil, err
 	}
 
 	var urls []string
-	doc.Find("a.result__a").EachWithBreak(func(i int, s *goquery.Selection) bool {
+	for i, item := range googleResponse.Items {
 		if i >= n {
-			return false
+			break
 		}
-		href, exists := s.Attr("href")
-		if exists {
-			urls = append(urls, href)
-		}
-		return true
-	})
+		urls = append(urls, item.Link)
+	}
 
 	if len(urls) == 0 {
 		return nil, fmt.Errorf("no URLs found")
